@@ -8,6 +8,10 @@ import {
   type ClaudeCodeResult,
   runClaudeCodeEval,
 } from "./lib/claude-code-runner";
+import {
+  type AmpResult,
+  runAmpEval,
+} from "./lib/amp-runner";
 import { createNewEval, runEval } from "./lib/eval-runner";
 import { formatClaudeCodeResultsTable } from "./lib/format-results";
 import { MODELS } from "./lib/models";
@@ -276,6 +280,8 @@ function parseCliArgs(args: string[]) {
       values["agent-evals"] = true;
     } else if (arg === "--claude-code") {
       values["claude-code"] = true;
+    } else if (arg === "--amp") {
+      values["amp"] = true;
     } else if (arg === "-e" || arg === "--eval") {
       values.eval = args[++i];
     } else if (arg === "--evals") {
@@ -330,6 +336,7 @@ Options:
   -t, --threads <num>     Number of worker threads (default: 1, max: CPU cores)
       --all-models        Run single eval with all models (default: only first model)
       --claude-code       Use Claude Code agent instead of LLM models
+      --amp               Use Amp agent instead of LLM models
       --claude-timeout    Timeout for Claude Code in ms (default: 600000 = 10 minutes)
       --api-key <key>     Anthropic API key for Claude Code (or use ANTHROPIC_API_KEY env var)
       --dev-server-cmd    Command to start dev server (default: "npm run dev")
@@ -344,8 +351,14 @@ Examples:
   # Run all evals with Claude Code
   cli.ts --all --claude-code
 
+  # Run all evals with Amp
+  cli.ts --all --amp
+
   # Run a specific eval with Claude Code
   cli.ts --eval 001-server-component --claude-code
+
+  # Run a specific eval with Amp
+  cli.ts --eval 001-server-component --amp
 
   # Run multiple specific evals
   cli.ts --evals 001-server-component,002-client-component,003-cookies
@@ -1452,6 +1465,80 @@ async function main() {
       }
       await createNewEval(values.name, values.prompt);
       return;
+    }
+
+    // Amp mode
+    if (values["amp"]) {
+      const apiKey = values["api-key"] || process.env.AMP_API_KEY;
+      if (!apiKey) {
+        console.error(
+          "❌ Error: Amp API key is required for Amp mode."
+        );
+        console.error(
+          "Set AMP_API_KEY environment variable or use --api-key option."
+        );
+        process.exit(1);
+      }
+
+      const ampOptions = {
+        verbose: values.verbose || false,
+        debug: values.debug || false,
+        timeout: values["claude-timeout"]
+          ? parseInt(values["claude-timeout"])
+          : 600000,
+        apiKey,
+      };
+
+      if (values.eval || positionals[0]) {
+        const evalPath = values.eval || positionals[0];
+
+        // Validate that eval exists
+        const regularEvals = await getAllEvals(false);
+        const agentEvals = await getAllEvals(true);
+        const allEvals = [...regularEvals, ...agentEvals];
+
+        if (!allEvals.includes(evalPath)) {
+          console.error(`Error: Eval '${evalPath}' not found.`);
+          console.log("\nAvailable evals:");
+          allEvals.forEach((evalName) => console.log(`  ${evalName}`));
+          process.exit(1);
+        }
+
+        console.log(`🤖 Running Amp eval: ${evalPath}\n`);
+
+        const result = await runAmpEval(evalPath, ampOptions);
+
+        // Format result for display
+        const formattedResult = {
+          evaluationResults: {
+            buildSuccess: result.buildSuccess,
+            lintSuccess: result.lintSuccess,
+            testSuccess: result.testSuccess,
+            buildOutput: result.buildOutput,
+            lintOutput: result.lintOutput,
+            testOutput: result.testOutput,
+          },
+        };
+
+        // Display results in table format
+        await displaySingleResult(
+          evalPath,
+          formattedResult,
+          values.dry ?? false,
+          "Amp"
+        );
+
+        // Display duration
+        const durationSec = (result.duration / 1000).toFixed(1);
+        console.log(`\n⏱️  Duration: ${durationSec}s`);
+
+        const success =
+          result.success &&
+          result.buildSuccess &&
+          result.lintSuccess &&
+          result.testSuccess;
+        process.exit(success ? 0 : 1);
+      }
     }
 
     // Claude Code mode

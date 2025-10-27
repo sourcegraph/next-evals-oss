@@ -34,6 +34,9 @@ export AI_GATEWAY_API_KEY="your-ai-gateway-key"
 
 # For Claude Code evals
 export ANTHROPIC_API_KEY="your-anthropic-key"
+
+# For Amp evals
+export AMP_API_KEY="your-amp-key"
 ```
 
 **Note:** The `--dry` flag is recommended for testing as it runs evaluations locally without uploading results to Braintrust
@@ -101,6 +104,33 @@ bun claude-code-cli.ts --eval 001-server-component --verbose
 
 # Debug mode - keep output folders
 bun claude-code-cli.ts --eval 001-server-component --debug
+```
+
+#### Amp Evals
+
+Run evals using Amp (AI coding agent):
+
+```bash
+# Run a specific eval with Amp
+bun amp-cli.ts --eval 001-server-component
+
+# Or use the main CLI with --amp flag
+bun cli.ts --eval 001-server-component --amp
+
+# Run all evals with Amp
+bun amp-cli.ts --all
+
+# With custom timeout (default: 600000ms = 10 minutes)
+bun amp-cli.ts --eval 001-server-component --timeout 900000
+
+# With custom API key (or use AMP_API_KEY env var)
+bun amp-cli.ts --eval 001-server-component --api-key your-amp-key
+
+# Verbose output
+bun amp-cli.ts --eval 001-server-component --verbose
+
+# Debug mode - keep output folders
+bun amp-cli.ts --eval 001-server-component --debug
 ```
 
 #### Claude Code with Dev Server and Hooks
